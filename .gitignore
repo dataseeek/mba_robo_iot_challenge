@@ -1,0 +1,11 @@
+# Dataset images (run download_dataset.py to populate)
+data/NENHUM/*.jpg
+data/PESSOA/*.jpg
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Model training outputs (committed models are in model/)
+*.keras

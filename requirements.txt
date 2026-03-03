@@ -1,0 +1,14 @@
+# Inference (api.py) — install on RPi
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+python-multipart>=0.0.6
+opencv-python-headless>=4.8.0
+numpy>=1.24.0
+pydantic>=2.0.0
+websockets>=12.0
+# On RPi: pip install tflite-runtime
+# On dev machine with full TF: fallback is automatic
+
+# Training (train.py) — workstation only
+# tensorflow>=2.13.0
+# matplotlib>=3.7.0

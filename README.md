@@ -1,14 +1,14 @@
-# Person Detection API — RoboIoT
+# Detecção de Pessoas — RoboIoT
 
-Binary person detection (PESSOA / NENHUMA) using Transfer Learning on MobileNet, with a FastAPI inference server designed for deployment on modest hardware (e.g. Raspberry Pi).
+Detecção binária de pessoas (PESSOA / NENHUMA) usando Transfer Learning com MobileNet, com servidor de inferência FastAPI projetado para implantação em hardware modesto (ex: Raspberry Pi).
 
-Based on the Transfer Learning technique from `model-train.ipynb`, adapted for binary person detection with INT8 TFLite quantization (155 KB model).
+Baseado na técnica de Transfer Learning adaptada para detecção binária de pessoas com quantização TFLite INT8 (modelo de 155 KB).
 
-## Architecture
+## Arquitetura
 
 ```
-                                  MobileNet (alpha=0.25, ImageNet weights)
-                                  Cut at conv_pw_10_relu
+                                  MobileNet (alpha=0.25, pesos ImageNet)
+                                  Corte em conv_pw_10_relu
                                            |
                                      Reshape → Dropout(0.1) → Flatten
                                            |
@@ -17,117 +17,117 @@ Based on the Transfer Learning technique from `model-train.ipynb`, adapted for b
                               NENHUMA(0)      PESSOA(1)
 ```
 
-- **Input**: 96x96x3 RGB image
-- **Output**: Binary classification with confidence score
-- **Model size**: ~155 KB (INT8 quantized TFLite)
-- **Training**: 40 frozen epochs + 1 fine-tune epoch (LR=0.00001)
-- **Accuracy**: ~95% on COCO val2017 subset
+- **Entrada**: Imagem RGB 96x96x3
+- **Saída**: Classificação binária com score de confiança
+- **Tamanho do modelo**: ~155 KB (TFLite quantizado INT8)
+- **Treinamento**: 80 epochs base congelada + 1 epoch fine-tuning (LR=0.00001)
+- **Acurácia**: ~95% no subconjunto COCO val2017
 
-## Project Structure
+## Estrutura do Projeto
 
 ```
-roboiot/
-├── config.py              # Shared constants (architecture, hyperparameters, thresholds)
-├── download_dataset.py    # Download COCO person/no-person dataset
-├── train.py               # Training CLI (requires full TensorFlow)
-├── api.py                 # FastAPI inference server (TFLite runtime only)
-├── stream_client.py       # Webcam client for remote detection
-├── requirements.txt       # Dependencies
-├── model-train.ipynb      # Reference notebook (cat classification)
-├── dataset/               # Training data (user-provided or downloaded)
-│   ├── NENHUM/            #   Images with no person
-│   └── PESSOA/            #   Images with person
-└── output/                # Generated models
-    ├── person-detect-model.keras    # Full Keras model
-    └── person-detect-model.tflite   # INT8 quantized (deploy this)
+mba_robo_iot_challenge/
+├── config.py                  # Constantes compartilhadas (arquitetura, hiperparâmetros, limiares)
+├── download_dataset.py        # Download do dataset COCO pessoa/sem-pessoa
+├── train.py                   # CLI de treinamento (requer TensorFlow completo)
+├── api.py                     # Servidor de inferência FastAPI (apenas TFLite runtime)
+├── stream_client.py           # Cliente webcam para detecção remota
+├── requirements.txt           # Dependências
+├── person-detect-train.ipynb  # Notebook de treinamento (detecção de pessoas)
+├── data/                      # Dados de treinamento (baixar com download_dataset.py)
+│   ├── NENHUM/                #   Imagens sem pessoa
+│   └── PESSOA/                #   Imagens com pessoa
+└── model/                     # Modelos treinados
+    ├── person-detect-model.tflite       # Float16 (~217 KB)
+    └── person-detect-model-int8.tflite  # INT8 quantizado (~155 KB, deploy)
 ```
 
-## Quick Start
+## Início Rápido
 
-### 1. Setup
+### 1. Configuração
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install tensorflow   # for training
+pip install tensorflow   # para treinamento
 pip install fastapi uvicorn[standard] python-multipart opencv-python-headless numpy pydantic websockets
 ```
 
-### 2. Download Dataset
+### 2. Download do Dataset
 
-Downloads a balanced subset from COCO 2017 (person vs no-person images):
+Baixa um subconjunto balanceado do COCO 2017 (imagens com pessoa vs sem pessoa):
 
 ```bash
 python download_dataset.py --count 1000 --split val --workers 8
 ```
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--count` | 1000 | Images per class |
-| `--split` | val | COCO split (`val` = 5K images, `train` = 118K) |
-| `--workers` | 4 | Parallel download threads |
-| `--cache` | .coco_cache | Annotation cache directory |
+| Flag | Padrão | Descrição |
+|------|--------|-----------|
+| `--count` | 1000 | Imagens por classe |
+| `--split` | val | Split do COCO (`val` = 5K imagens, `train` = 118K) |
+| `--workers` | 4 | Threads de download paralelo |
+| `--cache` | .coco_cache | Diretório de cache das anotações |
 
-### 3. Train
+### 3. Treinamento
 
 ```bash
-python train.py --dataset ./dataset --output ./output
+python train.py --dataset ./data --output ./model
 ```
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--dataset` | *(required)* | Path to dataset with NENHUM/ and PESSOA/ subdirs |
-| `--output` | ./output | Output directory for models |
-| `--frozen-epochs` | 40 | Phase 1 epochs (frozen MobileNet base) |
-| `--finetune-epochs` | 20 | Phase 2 epochs (full model fine-tuning) |
-| `--batch-size` | 100 | Training batch size |
-| `--no-finetune` | - | Skip fine-tuning phase |
-| `--no-quantize` | - | Skip TFLite INT8 export |
+| Flag | Padrão | Descrição |
+|------|--------|-----------|
+| `--dataset` | *(obrigatório)* | Caminho do dataset com subdiretórios NENHUM/ e PESSOA/ |
+| `--output` | ./output | Diretório de saída dos modelos |
+| `--frozen-epochs` | 40 | Epochs da fase 1 (base MobileNet congelada) |
+| `--finetune-epochs` | 20 | Epochs da fase 2 (fine-tuning do modelo completo) |
+| `--batch-size` | 100 | Tamanho do batch de treinamento |
+| `--no-finetune` | - | Pular fase de fine-tuning |
+| `--no-quantize` | - | Pular exportação TFLite INT8 |
 
-Quick sanity check:
+Teste rápido:
 
 ```bash
-python train.py --dataset ./dataset --output ./output --frozen-epochs 2 --finetune-epochs 1
+python train.py --dataset ./data --output ./model --frozen-epochs 2 --finetune-epochs 1
 ```
 
-### 4. Run API
+### 4. Executar API
 
 ```bash
-python api.py --model ./output/person-detect-model.tflite
+python api.py --model ./model/person-detect-model.tflite
 ```
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--model` | auto-detect | Path to .tflite model |
-| `--host` | 0.0.0.0 | Bind address |
-| `--port` | 8000 | Port |
-| `--confidence` | 0.6 | Detection confidence threshold |
-| `--fps` | 5 | Camera stream FPS |
+| Flag | Padrão | Descrição |
+|------|--------|-----------|
+| `--model` | auto-detectar | Caminho do modelo .tflite |
+| `--host` | 0.0.0.0 | Endereço de bind |
+| `--port` | 8000 | Porta |
+| `--confidence` | 0.6 | Limiar de confiança para detecção |
+| `--fps` | 5 | FPS do stream de câmera |
 
-Or via uvicorn:
+Ou via uvicorn:
 
 ```bash
-MODEL_PATH=./output/person-detect-model.tflite uvicorn api:app --host 0.0.0.0 --port 8000
+MODEL_PATH=./model/person-detect-model.tflite uvicorn api:app --host 0.0.0.0 --port 8000
 ```
 
-## API Endpoints
+## Endpoints da API
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/` | Web UI — drag & drop images for visual testing |
-| `GET` | `/health` | Health check + model status |
-| `POST` | `/detect` | Upload image → JSON result |
-| `POST` | `/detect/image` | Upload image → annotated JPEG with detection overlay |
-| `POST` | `/stream/start` | Start camera/RTSP stream processing |
-| `POST` | `/stream/stop` | Stop camera stream |
-| `GET` | `/stream/status` | Current stream state + latest result |
-| `WS` | `/ws/stream` | Real-time detection results via WebSocket |
+| Método | Rota | Descrição |
+|--------|------|-----------|
+| `GET` | `/` | Interface Web — arraste e solte imagens para teste visual |
+| `GET` | `/health` | Health check + status do modelo |
+| `POST` | `/detect` | Upload de imagem → resultado JSON |
+| `POST` | `/detect/image` | Upload de imagem → JPEG anotado com overlay de detecção |
+| `POST` | `/stream/start` | Iniciar processamento de stream câmera/RTSP |
+| `POST` | `/stream/stop` | Parar stream de câmera |
+| `GET` | `/stream/status` | Estado atual do stream + último resultado |
+| `WS` | `/ws/stream` | Resultados de detecção em tempo real via WebSocket |
 
-### Examples
+### Exemplos
 
-**Detect (JSON)**:
+**Detectar (JSON)**:
 ```bash
-curl -X POST -F "file=@photo.jpg" http://localhost:8000/detect
+curl -X POST -F "file=@foto.jpg" http://localhost:8000/detect
 ```
 ```json
 {
@@ -138,65 +138,65 @@ curl -X POST -F "file=@photo.jpg" http://localhost:8000/detect
 }
 ```
 
-**Detect (annotated image)**:
+**Detectar (imagem anotada)**:
 ```bash
-curl -X POST -F "file=@photo.jpg" http://localhost:8000/detect/image -o result.jpg
+curl -X POST -F "file=@foto.jpg" http://localhost:8000/detect/image -o resultado.jpg
 ```
 
-**Start camera stream**:
+**Iniciar stream de câmera**:
 ```bash
 curl -X POST -H "Content-Type: application/json" \
   -d '{"source": 0}' http://localhost:8000/stream/start
 ```
 
-**RTSP stream**:
+**Stream RTSP**:
 ```bash
 curl -X POST -H "Content-Type: application/json" \
-  -d '{"source": "rtsp://user:pass@camera-ip:554/stream"}' http://localhost:8000/stream/start
+  -d '{"source": "rtsp://usuario:senha@ip-camera:554/stream"}' http://localhost:8000/stream/start
 ```
 
-## Webcam Stream Client
+## Cliente de Stream Webcam
 
-For remote webcam detection over LAN. Run on any machine with a webcam:
+Para detecção remota via webcam na rede local. Execute em qualquer máquina com webcam:
 
 ```bash
 pip install opencv-python requests
-python stream_client.py --api http://<server-ip>:8000
+python stream_client.py --api http://<ip-servidor>:8000
 ```
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--api` | *(required)* | API URL (e.g. `http://<server-ip>:8000`) |
-| `--camera` | 0 | Webcam index |
-| `--delay` | 1.0 | Seconds between detections |
+| Flag | Padrão | Descrição |
+|------|--------|-----------|
+| `--api` | *(obrigatório)* | URL da API (ex: `http://<ip-servidor>:8000`) |
+| `--camera` | 0 | Índice da webcam |
+| `--delay` | 1.0 | Segundos entre detecções |
 
-Opens a window showing the live annotated feed. Press `q` to quit.
+Abre uma janela mostrando o feed anotado ao vivo. Pressione `q` para sair.
 
-## Raspberry Pi Deployment
+## Deploy no Raspberry Pi
 
-On the RPi, install only the lightweight inference dependencies (no full TensorFlow):
+No RPi, instale apenas as dependências leves de inferência (sem TensorFlow completo):
 
 ```bash
 pip install tflite-runtime
 pip install fastapi uvicorn[standard] python-multipart opencv-python-headless numpy pydantic websockets
 ```
 
-Copy only these files to the RPi:
+Copie apenas estes arquivos para o RPi:
 - `config.py`
 - `api.py`
-- `output/person-detect-model.tflite`
+- `model/person-detect-model.tflite`
 
 ```bash
 python api.py --model person-detect-model.tflite --port 8000
 ```
 
-## Tech Stack
+## Stack Tecnológico
 
-| Component | Technology |
-|-----------|------------|
-| Training | TensorFlow/Keras 3, MobileNet |
-| Inference | TFLite Runtime (INT8 quantized) |
+| Componente | Tecnologia |
+|------------|------------|
+| Treinamento | TensorFlow/Keras 3, MobileNet |
+| Inferência | TFLite Runtime (quantizado INT8) |
 | API | FastAPI, Uvicorn |
-| Image processing | OpenCV |
+| Processamento de imagem | OpenCV |
 | Dataset | COCO 2017 |
-| Real-time | WebSocket, threading |
+| Tempo real | WebSocket, threading |
